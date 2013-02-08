@@ -3,26 +3,62 @@ package main
 import (
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/iron-io/iron_mq_go"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
-var ironmqProject = os.Getenv("IRON_MQ_PROJECT_ID")
-var ironmqToken = os.Getenv("IRON_MQ_TOKEN")
-var ironmqRegion = ironmq.IronAWSUSEast
+const batchSize int = 1000                               // maximum documents per batch
+const batchPause time.Duration = time.Millisecond * 1000 // milliseconds between batch updates
 
-var queueName = "elasticsearch_updates"
-
-var client = ironmq.NewClient(ironmqProject, ironmqToken, ironmqRegion)
-var queue = client.Queue(queueName)
+var serverPort = os.Getenv("PORT")
+var updates chan string = make(chan string, batchSize)
 
 func main() {
-  go processor()
-  
-	fmt.Println(queue)
+	go processor()
+	server()
+}
+
+// Processor receives batch updates from the updates channel and sends them to Elasticsearch,
+// subject to a short cooldown interval. The strings in the updates channel should be formatted
+// for the bulk API
+func processor() {
+
+	// Create an array of strings to help prepare our bulk request,
+	// set its length to zero.
+	batch := make([]string, batchSize)
+	batch = batch[0:0]
+
+	// A short interval to wait between requests.
+	limiter := time.Tick(batchPause)
+
+	// Infinite loop to pull updates out of a channel, and periodically send them to Elasticsearch
+	for {
+		select {
+
+		// Pull as many updates as we can from a channel, up to its maximum length.
+		case update := <-updates:
+			batch = append(batch, update)
+
+		// When the channel is empty, combine and send the batch in a Bulk API request
+		default:
+			if len(batch) > 0 {
+				log.Println("Processed", len(batch), "updates")
+				// TODO: send the batch to Elasticsearch
+				// Reset the batch array
+				batch = batch[0:0]
+			}
+			<-limiter
+		}
+	}
+}
+
+// Set up and run an HTTP server that intercepts updates and formats them for batches,
+// and also proxies searches through to Elasticsearch.
+func server() {
 
 	r := mux.NewRouter()
 	s := r.Methods("PUT", "POST").Subrouter()
@@ -50,8 +86,8 @@ func main() {
 
 	http.Handle("/", r)
 
-	fmt.Println("listening on " + os.Getenv("PORT") + "...")
-	err := http.ListenAndServe(":"+os.Getenv("PORT"), nil)
+	fmt.Println("listening on " + serverPort + "...")
+	err := http.ListenAndServe(":"+serverPort, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -97,19 +133,16 @@ func readBody(req *http.Request) string {
 
 // Parse individual document updates and queue them
 func queueDeletes(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, document delete")
-	fmt.Fprint(res, bulk("delete", req))
-	queue.Push(bulk("delete", req))
+	updates <- bulk("delete", req)
 }
 
 // Parse individual document updates and queue them
 func queueUpdates(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, document delete")
-	queue.Push(bulk("index", req))
+	updates <- bulk("index", req)
 }
 
 // Proxy read requests straight through to Elasticsearch
 // TODO: for future enhancement, log some stats about this request
 func proxy(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, proxy")
+	fmt.Fprintln(res, "hello, proxy", req)
 }
