@@ -9,7 +9,7 @@ Elastic Mill behaves as a faux Elasticsearch endpoint for your updates. It consi
 
 ## Quick start
 
-ElasticMill has been designed for deployment on Heroku, using the Bonsai Elasticsearch and IronMQ addons.
+ElasticMill has been designed for deployment on Heroku, using the Bonsai Elasticsearch addons.
 
 ```bash
 git clone http://github.com/onemorecloud/elasticmill.git
