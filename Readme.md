@@ -20,6 +20,8 @@ heroku addons:add bonsai:starter # or heroku config:add BONSAI_URL=another-app's
 git push heroku master
 ```
 
+You can now use the web URL from `heroku apps:info` as an Elasticsearch endpoint for updates.
+
 ## Example usage
 
 Configure your application to direct all its updates to this server. Individual document updates will be consolidated and batched with other bulk updates and sent to Elasticsearch's Bulk API.
