@@ -73,6 +73,7 @@ func processor() {
 				if false {
 					body, _ := ioutil.ReadAll(resp.Body)
 					log.Println("Response", string(body))
+					resp.Body.Close()
 				}
 
 				// Reset the batch array
@@ -149,16 +150,14 @@ func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
 // implicit from the URL and omitted in the payload, so we have to deal with
 // that.
 func queueIndexBulk(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, index bulk")
-	respond202(res)
+	respond501(res)
 }
 
 // Parse index bulk requests and queue them.  The index and type names may have
 // been implicit from the URL and omitted in the payload, so we have to deal
 // with that.
 func queueTypeBulk(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, type bulk")
-	respond202(res)
+	respond501(res)
 }
 
 // Parse individual document updates and queue them
@@ -181,6 +180,7 @@ func queueUpdates(res http.ResponseWriter, req *http.Request) {
 // newline.
 func readBody(req *http.Request) string {
 	body, err := ioutil.ReadAll(req.Body)
+	req.Body.Close()
 	if err != nil {
 		return "{}"
 	}
@@ -203,8 +203,17 @@ func bulk(action string, req *http.Request) string {
 // Response writers
 //
 
+// Indicate that we've queued the message
 func respond202(res http.ResponseWriter) {
 	res.Header().Set("Content-Type", "application/json; charset=utf-8")
 	res.WriteHeader(202)
 	fmt.Fprintln(res, `{ "status": "ok", "message": "queued" }`)
+}
+
+// For the sake of shipping a prototype, I'm going to refuse index and type
+// bulk imports while I work out the nuts and bolts of parsing them.
+func respond501(res http.ResponseWriter) {
+	res.Header().Set("Content-Type", "application/json; charset=utf-8")
+	res.WriteHeader(502)
+	fmt.Fprintln(res, `{ "status": "error", "message": "this action is not implemented, pull requests welcome!" }`)
 }
