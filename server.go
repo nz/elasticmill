@@ -54,13 +54,27 @@ func processor() {
 		case update := <-updates:
 			batch = append(batch, update)
 
-			// When the channel is empty, combine the batch, send it to ES, then wait a
-			// bit.
+		// When the channel is empty, combine the batch, send it to ES, then wait a
+		// bit.
 		default:
 			if len(batch) > 0 {
 				log.Println("Processed", len(batch), "updates")
-				// TODO: send the batch to Elasticsearch
-				// http.Post("http://example.com/upload", "image/jpeg", &buf)
+
+				// POST the batch to the Elasticsearch cluster _bulk handler
+				resp, err := http.Post(
+					elasticsearchUrl+"/_bulk", "application/json",
+					strings.NewReader(strings.Join(batch, "")))
+
+				if err != nil {
+					log.Println("Error:", err)
+				}
+
+				// TODO: log something interesting from the response
+				if false {
+					body, _ := ioutil.ReadAll(resp.Body)
+					log.Println("Response", string(body))
+				}
+
 				// Reset the batch array
 				batch = batch[0:0]
 			}
