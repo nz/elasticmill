@@ -141,10 +141,8 @@ func proxy(res http.ResponseWriter, req *http.Request) {
 
 // Parse cluster bulk updates and queue them.
 func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, cluster bulk")
-	// var p []byte
-	// req.Body.Read(p)
-	// queue.Push()
+	updates <- readBody(req)
+	respond202(res)
 }
 
 // Parse index bulk requests and queue them.  The index name may have been
@@ -152,7 +150,7 @@ func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
 // that.
 func queueIndexBulk(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(res, "hello, index bulk")
-	// queue.Push(req.Body)
+	respond202(res)
 }
 
 // Parse index bulk requests and queue them.  The index and type names may have
@@ -160,17 +158,19 @@ func queueIndexBulk(res http.ResponseWriter, req *http.Request) {
 // with that.
 func queueTypeBulk(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(res, "hello, type bulk")
-	// queue.Push(req.Body)
+	respond202(res)
 }
 
 // Parse individual document updates and queue them
 func queueDeletes(res http.ResponseWriter, req *http.Request) {
 	updates <- bulk("delete", req)
+	respond202(res)
 }
 
 // Parse individual document updates and queue them
 func queueUpdates(res http.ResponseWriter, req *http.Request) {
 	updates <- bulk("index", req)
+	respond202(res)
 }
 
 //
@@ -197,4 +197,14 @@ func bulk(action string, req *http.Request) string {
 
 	return msg + readBody(req) + "\n"
 	// return msg + string.TrimRight(req.Body, `\n`) + `\n`
+}
+
+//
+// Response writers
+//
+
+func respond202(res http.ResponseWriter) {
+	res.Header().Set("Content-Type", "application/json; charset=utf-8")
+	res.WriteHeader(202)
+	fmt.Fprintln(res, `{ "status": "ok", "message": "queued" }`)
 }
