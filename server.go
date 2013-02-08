@@ -21,7 +21,8 @@ const batchPause time.Duration = time.Millisecond * 1000 // milliseconds between
 var serverPort = os.Getenv("PORT")
 var elasticsearchUrl = os.Getenv("BONSAI_URL")
 
-// Buffered channel for updates. These should be strings in the Bulk API format.
+// Buffered channel for updates. These should be strings in the Bulk API
+// format.
 var updates chan string = make(chan string, batchSize)
 
 // Start up the processor and the HTTP server.
@@ -30,13 +31,13 @@ func main() {
 	server()
 }
 
-// Processor receives batch updates from the updates channel and sends them to Elasticsearch,
-// subject to a short cooldown interval. The strings in the updates channel should be formatted
-// for the bulk API
+// Processor receives batch updates from the updates channel and sends them to
+// Elasticsearch, subject to a short cooldown interval. The strings in the
+// updates channel should be formatted for the bulk API
 func processor() {
 
-	// Create an array of strings to help prepare our bulk request,
-	// set its length to zero.
+	// Create an array of strings to help prepare our bulk request, set its
+	// length to zero.
 	batch := make([]string, batchSize)
 	batch = batch[0:0]
 
@@ -44,7 +45,8 @@ func processor() {
 	// Elasticsearch to think, as well as our channel to refill.
 	limiter := time.Tick(batchPause)
 
-	// Infinite loop to pull updates out of a channel, and periodically send them to Elasticsearch
+	// Infinite loop to pull updates out of a channel, and periodically send them
+	// to Elasticsearch
 	for {
 		select {
 
@@ -52,7 +54,8 @@ func processor() {
 		case update := <-updates:
 			batch = append(batch, update)
 
-		// When the channel is empty, combine the batch, send it to ES, then wait a bit.
+			// When the channel is empty, combine the batch, send it to ES, then wait a
+			// bit.
 		default:
 			if len(batch) > 0 {
 				log.Println("Processed", len(batch), "updates")
@@ -66,8 +69,8 @@ func processor() {
 	}
 }
 
-// Set up and run an HTTP server that intercepts updates and formats them for batches,
-// and also proxies searches through to Elasticsearch.
+// Set up and run an HTTP server that intercepts updates and formats them for
+// batches, and also proxies searches through to Elasticsearch.
 func server() {
 
 	r := mux.NewRouter()
@@ -109,6 +112,7 @@ func server() {
 //
 
 // Proxy read requests straight through to Elasticsearch
+// TODO: parse the URL and initialize the proxy somewhere else?
 func proxy(res http.ResponseWriter, req *http.Request) {
 	// Set up a simple proxy for read requests
 	targetUrl, err := url.Parse(elasticsearchUrl)
@@ -121,7 +125,7 @@ func proxy(res http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Parse bulk updates and queue them
+// Parse cluster bulk updates and queue them.
 func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(res, "hello, cluster bulk")
 	// var p []byte
@@ -129,11 +133,17 @@ func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
 	// queue.Push()
 }
 
+// Parse index bulk requests and queue them.  The index name may have been
+// implicit from the URL and omitted in the payload, so we have to deal with
+// that.
 func queueIndexBulk(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(res, "hello, index bulk")
 	// queue.Push(req.Body)
 }
 
+// Parse index bulk requests and queue them.  The index and type names may have
+// been implicit from the URL and omitted in the payload, so we have to deal
+// with that.
 func queueTypeBulk(res http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(res, "hello, type bulk")
 	// queue.Push(req.Body)
@@ -153,7 +163,8 @@ func queueUpdates(res http.ResponseWriter, req *http.Request) {
 // Request helpers
 //
 
-// Helper to read the body of a document update request.
+// Helper to read the body of a document update request, and enforce a trailing
+// newline.
 func readBody(req *http.Request) string {
 	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
