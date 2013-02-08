@@ -6,17 +6,25 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 )
 
+// Basic options for the batching size and frequency
 const batchSize int = 1000                               // maximum documents per batch
 const batchPause time.Duration = time.Millisecond * 1000 // milliseconds between batch updates
 
+// Configure the server from the environment
 var serverPort = os.Getenv("PORT")
+var elasticsearchUrl = os.Getenv("BONSAI_URL")
+
+// Buffered channel for updates. These should be strings in the Bulk API format.
 var updates chan string = make(chan string, batchSize)
 
+// Start up the processor and the HTTP server.
 func main() {
 	go processor()
 	server()
@@ -32,22 +40,24 @@ func processor() {
 	batch := make([]string, batchSize)
 	batch = batch[0:0]
 
-	// A short interval to wait between requests.
+	// A short interval to wait between requests. This gives a bit of time for
+	// Elasticsearch to think, as well as our channel to refill.
 	limiter := time.Tick(batchPause)
 
 	// Infinite loop to pull updates out of a channel, and periodically send them to Elasticsearch
 	for {
 		select {
 
-		// Pull as many updates as we can from a channel, up to its maximum length.
+		// Pull as many updates as we can and batch them into a slice.
 		case update := <-updates:
 			batch = append(batch, update)
 
-		// When the channel is empty, combine and send the batch in a Bulk API request
+		// When the channel is empty, combine the batch, send it to ES, then wait a bit.
 		default:
 			if len(batch) > 0 {
 				log.Println("Processed", len(batch), "updates")
 				// TODO: send the batch to Elasticsearch
+				// http.Post("http://example.com/upload", "image/jpeg", &buf)
 				// Reset the batch array
 				batch = batch[0:0]
 			}
@@ -63,7 +73,7 @@ func server() {
 	r := mux.NewRouter()
 	s := r.Methods("PUT", "POST").Subrouter()
 
-	// Match _bulk handlers
+	// Match the various _bulk handlers
 	s.Path("/_bulk").
 		HandlerFunc(queueClusterBulk)
 	s.Path("/{index}/_bulk").
@@ -71,25 +81,43 @@ func server() {
 	s.Path("/{index}/{type}/_bulk").
 		HandlerFunc(queueTypeBulk)
 
-	// Match individual document updates
+	// Handle individual document updates
 	r.Methods("POST", "PUT").
 		Path("/{index}/{type}/{id}").
 		HandlerFunc(queueUpdates)
 
+	// Handle individual document deletes as well
 	r.Methods("DELETE").
 		Path("/{index}/{type}/{id}").
 		HandlerFunc(queueDeletes)
 
-	// Proxy read requests
+	// Proxy read requests straight through to Elasticsearch
 	r.PathPrefix("/").
 		HandlerFunc(proxy)
 
+	// Start the HTTP server
 	http.Handle("/", r)
-
 	fmt.Println("listening on " + serverPort + "...")
 	err := http.ListenAndServe(":"+serverPort, nil)
 	if err != nil {
 		panic(err)
+	}
+}
+
+//
+// Request Handlers
+//
+
+// Proxy read requests straight through to Elasticsearch
+func proxy(res http.ResponseWriter, req *http.Request) {
+	// Set up a simple proxy for read requests
+	targetUrl, err := url.Parse(elasticsearchUrl)
+	if err != nil {
+		log.Println("ERROR - Couldn't parse URL:", elasticsearchUrl, " - ", err)
+		fmt.Fprintln(res, "Couldn't parse BONSAI_URL: '", elasticsearchUrl, "'")
+	} else {
+		proxy := httputil.NewSingleHostReverseProxy(targetUrl)
+		proxy.ServeHTTP(res, req)
 	}
 }
 
@@ -111,26 +139,6 @@ func queueTypeBulk(res http.ResponseWriter, req *http.Request) {
 	// queue.Push(req.Body)
 }
 
-// Helper to turn individual document updates into bulk JSON
-func bulk(action string, req *http.Request) string {
-	vars := mux.Vars(req)
-
-	msg := fmt.Sprintf(
-		"{\"index\":{\"_index\":\"%s\",\"_type\":\"%s\",\"_id\":\"%s\"}}\n",
-		vars["index"], vars["type"], vars["id"])
-
-	return msg + readBody(req) + "\n"
-	// return msg + string.TrimRight(req.Body, `\n`) + `\n`
-}
-
-func readBody(req *http.Request) string {
-	body, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return "{}"
-	}
-	return strings.TrimRight(string(body), "\n")
-}
-
 // Parse individual document updates and queue them
 func queueDeletes(res http.ResponseWriter, req *http.Request) {
 	updates <- bulk("delete", req)
@@ -141,8 +149,27 @@ func queueUpdates(res http.ResponseWriter, req *http.Request) {
 	updates <- bulk("index", req)
 }
 
-// Proxy read requests straight through to Elasticsearch
-// TODO: for future enhancement, log some stats about this request
-func proxy(res http.ResponseWriter, req *http.Request) {
-	fmt.Fprintln(res, "hello, proxy", req)
+//
+// Request helpers
+//
+
+// Helper to read the body of a document update request.
+func readBody(req *http.Request) string {
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return "{}"
+	}
+	return strings.TrimRight(string(body), "\n")
+}
+
+// Helper to turn individual document updates into bulk JSON
+func bulk(action string, req *http.Request) string {
+	vars := mux.Vars(req)
+
+	msg := fmt.Sprintf(
+		"{\"index\":{\"_index\":\"%s\",\"_type\":\"%s\",\"_id\":\"%s\"}}\n",
+		vars["index"], vars["type"], vars["id"])
+
+	return msg + readBody(req) + "\n"
+	// return msg + string.TrimRight(req.Body, `\n`) + `\n`
 }
