@@ -1,4 +1,4 @@
-# Elastic Mill _α_
+# Elastic Mill _(alpha)_
 
 Combine many small Elasticsearch updates into consolidated batch updates.
 
