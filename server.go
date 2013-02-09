@@ -109,7 +109,7 @@ func server() {
 		Path("/{index}/{type}/{id}").
 		HandlerFunc(queueDeletes)
 
-	// Proxy read requests straight through to Elasticsearch
+	// Proxy everything else straight through to Elasticsearch
 	r.PathPrefix("/").
 		HandlerFunc(proxy)
 
@@ -129,6 +129,7 @@ func server() {
 // Proxy read requests straight through to Elasticsearch
 // TODO: parse the URL and initialize the proxy somewhere else?
 func proxy(res http.ResponseWriter, req *http.Request) {
+	log.Println("Proxied:", req.Method, req.RequestURI)
 	// Set up a simple proxy for read requests
 	targetUrl, err := url.Parse(elasticsearchUrl)
 	if err != nil {
@@ -150,14 +151,16 @@ func queueClusterBulk(res http.ResponseWriter, req *http.Request) {
 // implicit from the URL and omitted in the payload, so we have to deal with
 // that.
 func queueIndexBulk(res http.ResponseWriter, req *http.Request) {
-	respond501(res)
+	log.Println("WARNING:", req.RequestURI, "is not currently optimized, use /_bulk instead")
+	proxy(res, req)
 }
 
 // Parse index bulk requests and queue them.  The index and type names may have
 // been implicit from the URL and omitted in the payload, so we have to deal
 // with that.
 func queueTypeBulk(res http.ResponseWriter, req *http.Request) {
-	respond501(res)
+	log.Println("WARNING:", req.RequestURI, "is not currently optimized, use /_bulk instead")
+	proxy(res, req)
 }
 
 // Parse individual document updates and queue them
@@ -207,7 +210,7 @@ func bulk(action string, req *http.Request) string {
 func respond202(res http.ResponseWriter) {
 	res.Header().Set("Content-Type", "application/json; charset=utf-8")
 	res.WriteHeader(202)
-	fmt.Fprintln(res, `{ "status": "ok", "message": "queued" }`)
+	fmt.Fprintln(res, `{"status":"ok","message":"queued"}`)
 }
 
 // For the sake of shipping a prototype, I'm going to refuse index and type
