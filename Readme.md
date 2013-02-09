@@ -11,6 +11,7 @@ ElasticMill has been designed for deployment on Heroku, using the Bonsai Elastic
 ```bash
 git clone http://github.com/nz/elasticmill.git # or use your own fork
 cd elasticmill
+git checkout v1-wip
 heroku create --buildpack git://github.com/kr/heroku-buildpack-go.git
 heroku addons:add bonsai:starter # or heroku config:add BONSAI_URL=another-app's-bonsai-url
 git push heroku master
