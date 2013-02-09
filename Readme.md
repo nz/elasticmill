@@ -13,8 +13,9 @@ git clone http://github.com/nz/elasticmill.git # or use your own fork
 cd elasticmill
 git checkout v1-wip
 heroku create --buildpack git://github.com/kr/heroku-buildpack-go.git
-heroku addons:add bonsai:starter # or heroku config:add BONSAI_URL=another-app's-bonsai-url
-git push heroku master
+heroku addons:add bonsai:starter # or heroku config:add BONSAI_URL=...
+git push heroku HEAD:master
+heroku run 'curl -X POST $BONSAI_URL/test' # create a test index
 ```
 
 You can now use the web URL from `heroku apps:info` as the Elasticsearch endpoint for your application.

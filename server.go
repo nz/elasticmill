@@ -70,7 +70,7 @@ func processor() {
 				}
 
 				// TODO: log something interesting from the response
-				if false {
+				if true {
 					body, _ := ioutil.ReadAll(resp.Body)
 					log.Println("Response", string(body))
 					resp.Body.Close()
