@@ -1,8 +1,10 @@
-# Elastic Mill
+# Elastic Mill α
 
 Combine many small Elasticsearch updates into consolidated batch updates.
 
 Elastic Mill behaves as a faux Elasticsearch endpoint for your updates. It proxies all of your read requests, while intercepting, queuing and combining your updates into batches.
+
+**Experimental work in progress:** If you feel adventurous, give it a try, it seems to work. Let me know how it goes. Otherwise, give me a few more days to test and polish.
 
 ## Quick start
 
